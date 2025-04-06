@@ -3,7 +3,7 @@ terraform {
     bucket         = "hub-colegio-infra-terraform"
     key            = "infra/terraform.tfstate"
     region         = "sa-east-1"
-    dynamodb_table = "terraform-lock"
+    dynamodb_table = "terraform-locks"
     encrypt        = true
   }
 }
