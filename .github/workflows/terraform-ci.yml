@@ -1,0 +1,64 @@
+name: Terraform Infraestrutura
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  decidir:
+    runs-on: ubuntu-latest
+    outputs:
+      destroy_flag: ${{ steps.check.outputs.destroy_flag }}
+      account: ${{ steps.check.outputs.account }}
+      project_name: ${{ steps.check.outputs.project_name }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v3
+
+      - name: Instalar yq
+        run: sudo apt-get update && sudo apt-get install -y yq
+
+      - name: Ler projeto.yml
+        id: check
+        run: |
+          flag=$(yq '.destroy' projeto.yml)
+          account=$(yq '.account' projeto.yml)
+          project_name=$(yq '.projectName' projeto.yml)
+          echo "destroy_flag=$flag" >> $GITHUB_OUTPUT
+          echo "account=$account" >> $GITHUB_OUTPUT
+          echo "project_name=$project_name" >> $GITHUB_OUTPUT
+
+  terraform:
+    needs: decidir
+    runs-on: ubuntu-latest
+    if: needs.decidir.outputs.destroy_flag == 'true' || needs.decidir.outputs.destroy_flag == 'false'
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v3
+
+      - name: Configurar AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: sa-east-1
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.6
+
+      - name: Inicializar Terraform
+        run: terraform init
+        working-directory: infra
+
+      - name: Terraform Destroy
+        if: needs.decidir.outputs.destroy_flag == 'true'
+        run: terraform destroy -auto-approve -var-file="terraform.tfvars"
+        working-directory: infra
+
+      - name: Terraform Apply
+        if: needs.decidir.outputs.destroy_flag == 'false' || needs.decidir.outputs.destroy_flag == ''
+        run: terraform apply -auto-approve -var-file="terraform.tfvars"
+        working-directory: infra
